@@ -28,25 +28,27 @@ I implement it here to speed up the implementation of NTT on Nexus ZKVM: reduce 
 
 ## Real world performance of NTT
 
-I had a few published research regards to high speed implementation of NTT. 
-For short, 
+I have published several research papers on high-speed implementations of the Number Theoretic Transform (NTT).
 
-1. In table 4 of my paper[2], a vectorize version of NTT faster than the C version with  compiler `-O3` (highest optimization) by `6 to 8` times. 
-2. NTT has the best time complexity `O(nlogn)`. 
-3. Compiler does not understand how to vectorize NTT properly. 
+In brief:
 
-How can 1 it impact the performance of ZKVM? 
+- In Table 4 of my paper [2], a vectorized version of NTT outperforms the C version compiled with the highest optimization level (-O3) by a factor of 6 to 8.
+- NTT achieves an optimal time complexity of O(nlog⁡n)O(nlogn).
+- Current compilers do not adequately vectorize NTT. A manual implementation of NTT significantly surpasses the performance of a pure C implementation. Consequently, one should not evaluate the performance of NTT solely based on compiler optimization.
 
-1. Batch processing SIMD NTT instructions -> Lead to at least 4x faster. 
-2. Higher level of parallelism, the current implementation does not make all my CPU cores full. There is not enough task for the CPU to run! If this is done properly, expect to be at least 2x faster. 
+Potential Impact on ZKVM Performance:
 
-With these estimation, I expect there is room for 8x improvement in speed. The prove time from 107 minutes can be reduced down to 13 minutes. It's 94 minutes different!. 
+- Implementing batch processing with SIMD NTT instructions could result in at least a 4x speedup.
+- Increasing the level of parallelism is crucial. The current implementation does not fully utilize all CPU cores, as there are insufficient tasks for the CPU to execute. Proper parallelism could yield at least a 2x improvement in performance.
+
+With these estimations, there is potential for an 8x improvement in speed. This enhancement could reduce the proof time from 107 minutes to approximately 13 minutes, a reduction of 94 minutes.
 
 ## How to run
 
 `cargo nexus verify`.
 
-
+## References
 
 [1] Huang, Junhao, et al. "Improved Plantard arithmetic for lattice-based cryptography." IACR Transactions on Cryptographic Hardware and Embedded Systems 2022.4 (2022): 614-636.
+
 [2] "Fast Falcon Signature Generation and Verification Using ARMv8 NEON Instructions" https://csrc.nist.gov/csrc/media/Events/2022/fourth-pqc-standardization-conference/documents/papers/fast-falcon-signature-generation-and-verification-pqc2022.pdf 
