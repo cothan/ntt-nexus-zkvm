@@ -110,6 +110,7 @@ impl Mul<&Polynomial> for FieldElement {
  */
 const ZETA_POW_BITREV: [i32; Polynomial::LENGTH] = {
     const ZETA: Integer = Polynomial::ROOT_OF_UNITY;
+
     const fn bitrev6(x: usize) -> usize {
         ((x >> 5) & 1)
             | (((x >> 4) & 1) << 1)
@@ -117,6 +118,18 @@ const ZETA_POW_BITREV: [i32; Polynomial::LENGTH] = {
             | (((x >> 2) & 1) << 3)
             | (((x >> 1) & 1) << 4)
             | ((x & 1) << 5)
+    }
+
+    const fn bitrev5(x: usize) -> usize {
+        ((x >> 4) & 1)
+            | (((x >> 3) & 1) << 1)
+            | (((x >> 2) & 1) << 2)
+            | (((x >> 1) & 1) << 3)
+            | (((x >> 0) & 1) << 4)
+    }
+
+    const fn bitrev4(x: usize) -> usize {
+        ((x >> 3) & 1) | (((x >> 2) & 1) << 1) | (((x >> 1) & 1) << 2) | (((x >> 0) & 1) << 3)
     }
 
     // Compute the powers of zeta
@@ -132,7 +145,12 @@ const ZETA_POW_BITREV: [i32; Polynomial::LENGTH] = {
     let mut pow_bitrev = [0i32; Polynomial::LENGTH];
     let mut i = 0;
     while i < Polynomial::LENGTH {
-        let mut b_prime = pow[bitrev6(i)];
+        let mut b_prime = match Polynomial::LENGTH {
+            16 => pow[bitrev4(i)],
+            32 => pow[bitrev5(i)],
+            64 => pow[bitrev6(i)],
+            _ => unreachable!(),
+        };
         b_prime <<= 32;
         b_prime = -b_prime;
         b_prime %= FieldElement::Q64;
@@ -146,8 +164,19 @@ const ZETA_POW_BITREV: [i32; Polynomial::LENGTH] = {
     pow_bitrev
 };
 impl Polynomial {
-    pub const LENGTH: usize = 64;
-    pub const ROOT_OF_UNITY: Integer = 9;
+    pub const LENGTH: usize = 16;
+    pub const ROOT_OF_UNITY: Integer = match Self::LENGTH {
+        16 => 15,
+        32 => 11,
+        64 => 9,
+        _ => unreachable!(),
+    };
+    pub const N_INV: Integer = match Self::LENGTH {
+        16 => 241,
+        32 => 249, // pow(32, -1, 257)
+        64 => 253, // pow(64, -1, 257)
+        _ => unreachable!(),
+    };
     /**
      * Performs the Number Theoretic Transform (NTT) on the polynomial.
      *
@@ -162,7 +191,8 @@ impl Polynomial {
 
         let mut f = self.coeffs;
 
-        for len in [32, 16, 8, 4, 2, 1] {
+        let mut len = Self::LENGTH / 2;
+        while len > 0 {
             for start in (0..Self::LENGTH).step_by(2 * len) {
                 let zeta: i32 = ZETA_POW_BITREV[k];
                 k += 1;
@@ -173,6 +203,8 @@ impl Polynomial {
                     f[j] = f[j] + t;
                 }
             }
+
+            len >>= 1;
         }
 
         f.into()
@@ -214,7 +246,8 @@ impl NttPolynomial {
         let mut f = self.coeffs;
 
         let mut k = ZETA_POW_BITREV.len() - 1;
-        for len in [1, 2, 4, 8, 16, 32] {
+        let mut len = 1;
+        while len < Polynomial::LENGTH {
             for start in (0..Polynomial::LENGTH).step_by(2 * len) {
                 let zeta = ZETA_POW_BITREV[k];
                 k -= 1;
@@ -225,10 +258,12 @@ impl NttPolynomial {
                     f[j + len] = (f[j + len] - t) * zeta;
                 }
             }
+
+            len <<= 1;
         }
 
         for i in 0..f.len() {
-            f[i] = f[i] * FieldElement(253);
+            f[i] = f[i] * FieldElement(Polynomial::N_INV);
         }
 
         Polynomial { coeffs: f }
@@ -241,7 +276,7 @@ mod tests {
 
     #[test]
     fn test_ntt_zero() {
-        let a = Polynomial {
+        let a: Polynomial = Polynomial {
             coeffs: [FieldElement::zero(); Polynomial::LENGTH],
         };
         let b = Polynomial {
